@@ -180,12 +180,22 @@ elseif ("${GIT_DL_METHOD}" STREQUAL "ssh")
 endif()
 
 # Find SQLite3
-pkg_search_module(SQLITE3 REQUIRED sqlite3)
-if (SQLITE3_VERSION VERSION_LESS 3.13)
-  message(FATAL_ERROR "GUFI requires sqlite3 3.13+. Got ${SQLITE3_VERSION}")
-endif()
+set(SQLITE3 sqlite3-src)
+set(SQLITE3_PREFIX ${CMAKE_BINARY_DIR}/${SQLITE3}-build)
+ExternalProject_Add(${SQLITE3}
+  DOWNLOAD_NAME     sqlite3.tar.gz
+  DOWNLOAD_DIR      ${CMAKE_BINARY_DIR}/src
+  URL               https://sqlite.org/snapshot/sqlite-snapshot-201903021525.tar.gz
+  URL_HASH          SHA1=4e80ac218cccf712cc56ebca5ca8a43529095124
+  BUILD_IN_SOURCE   1
+  PATCH_COMMAND     patch < ${CMAKE_SOURCE_DIR}/contrib/sqlite-autoconf-3270200.patch
+  CONFIGURE_COMMAND ./configure --prefix=${SQLITE3_PREFIX}
+  BUILD_COMMAND     make
+  INSTALL_COMMAND   make install
+)
+set(SQLITE3_INCLUDE_DIRS ${SQLITE3_PREFIX}/include)
+set(SQLITE3_LIBRARY_DIRS ${SQLITE3_PREFIX}/lib)
 include_directories(AFTER SYSTEM ${SQLITE3_INCLUDE_DIRS}) # -Ipath/to/sqlite3/include
-link_directories(${SQLITE3_LIBRARY_DIRS})                 # -Lpath/to/sqlite3/lib
 message(STATUS "SQLite3 headers located in ${SQLITE3_INCLUDEDIR}")
 message(STATUS "SQLite3 libraries located in ${SQLITE3_LIBRARY_DIRS}")
 set(CMAKE_INSTALL_RPATH "${SQLITE3_LIBRARY_DIRS}")
@@ -195,6 +205,7 @@ pkg_search_module(PCRE REQUIRED libpcre)
 set(pcre_PREFIX     ${CMAKE_BINARY_DIR}/src/sqlite3-pcre)
 if ("${GIT_DL_METHOD}" STREQUAL "https")
   ExternalProject_Add(sqlite3-pcre
+    DEPENDS ${SQLITE3}
     GIT_REPOSITORY    https://github.com/mar-file-system/sqlite3-pcre.git
     GIT_TAG           master
     GIT_SHALLOW       1
@@ -204,6 +215,7 @@ if ("${GIT_DL_METHOD}" STREQUAL "https")
   )
 elseif ("${GIT_DL_METHOD}" STREQUAL "ssh")
   ExternalProject_Add(sqlite3-pcre
+    DEPENDS ${SQLITE3}
     GIT_REPOSITORY    git@github.com:mar-file-system/sqlite3-pcre.git
     GIT_TAG           master
     GIT_SHALLOW       1
@@ -263,7 +275,7 @@ set(COMMON_INCLUDES ${CMAKE_SOURCE_DIR}/include ${XATTR_INCLUDEDIR} ${UUID_INCLU
 include_directories(${COMMON_INCLUDES})
 
 # set of libraries needed by the final binaries
-set(COMMON_LIBRARIES GUFI ${pcre_PREFIX}-build/libsqlite3-pcre.a sqlite3 pcre ${thpool_PREFIX}/C-Thread-Pool-build/libthpool.a Threads::Threads m)
+set(COMMON_LIBRARIES GUFI ${pcre_PREFIX}-build/libsqlite3-pcre.a ${SQLITE3_PREFIX}/lib/libsqlite3.a pcre ${thpool_PREFIX}/C-Thread-Pool-build/libthpool.a Threads::Threads m dl)
 
 # tell CMake to look at the src directory
 add_subdirectory(src)
